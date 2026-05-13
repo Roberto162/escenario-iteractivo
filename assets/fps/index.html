@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>FPS - Three.js</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+    body {
+        margin: 0;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+        background: #02070f;
+        color: #e5e9f0;
+    }
+
+    /* 🔝 barra superior centrada */
+    .top-bar {
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        background: rgba(10, 20, 40, 0.85);
+        padding: 8px 16px;
+        border-radius: 10px;
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(255,255,255,0.08);
+        z-index: 10;
+    }
+
+    /* texto */
+    .info {
+        font-size: 0.9rem;
+        color: #cbd5e1;
+        white-space: nowrap;
+    }
+
+    /* botón */
+    .btn-back {
+        background: linear-gradient(90deg, #3b82f6, #6366f1);
+        color: white;
+        padding: 5px 12px;
+        border-radius: 6px;
+        text-decoration: none;
+        font-size: 0.85rem;
+        transition: 0.3s;
+    }
+
+    .btn-back:hover {
+        background: linear-gradient(90deg, #60a5fa, #818cf8);
+    }
+
+    /* canvas */
+    #container {
+        width: 100vw;
+        height: 100vh;
+    }
+</style>
+
+</head>
+
+<body>
+
+<!-- 🔝 barra centrada -->
+<div class="top-bar">
+    <div class="info">
+        WASD mover | Mouse mirar/disparar | Espacio saltar
+    </div>
+    <a href="../../index.html" class="btn-back">Volver</a>
+</div>
+
+<!-- 🎮 escena -->
+<div id="container"></div>
+
+<!-- IMPORTMAP -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "../build/three.module.js",
+    "three/addons/": "../jsm/"
+  }
+}
+</script>
+
+<script type="module" src="./js/main.js?v=2"></script>
+
+</body>
+</html>
