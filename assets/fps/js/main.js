@@ -6,8 +6,16 @@ import { Octree } from "../../jsm/math/Octree.js";
 import { OctreeHelper } from "../../jsm/helpers/OctreeHelper.js";
 import { Capsule } from "../../jsm/math/Capsule.js";
 import { GUI } from "../../jsm/libs/lil-gui.module.min.js";
+
 const clock = new THREE.Clock();
 const scene = new THREE.Scene();
+let personaje;
+let mixer;
+
+let idleAction;
+let walkAction;
+let runAction;
+let attackAction;
 scene.background = new THREE.Color(0xded7c9);
 
 const camera = new THREE.PerspectiveCamera(
@@ -207,7 +215,7 @@ function updatePlayer(deltaTime) {
   const deltaPosition = playerVelocity.clone().multiplyScalar(deltaTime);
   playerCollider.translate(deltaPosition);
   playerCollisions();
-  camera.position.copy(playerCollider.end);
+  //camera.position.copy(playerCollider.end);
 }
 
 function playerSphereCollision(sphere) {
@@ -344,6 +352,42 @@ loader.load("ciudad.glb", (gltf) => {
   worldOctree.fromGraphNode(modelo);
 
 });
+
+loader.load("sauron.glb", (gltf) => {
+
+  personaje = gltf.scene;
+
+  personaje.scale.set(1, 1, 1);
+
+  personaje.position.set(0, 0, 0);
+
+  scene.add(personaje);
+
+  // sombras
+  personaje.traverse((child) => {
+
+    if (child.isMesh) {
+
+      child.castShadow = true;
+      child.receiveShadow = true;
+
+    }
+
+  });
+
+  // 🎬 animaciones
+  mixer = new THREE.AnimationMixer(personaje);
+
+  console.log(gltf.animations);
+
+  // Asignar animaciones
+  idleAction = mixer.clipAction(gltf.animations[0]);
+  walkAction = mixer.clipAction(gltf.animations[1]);
+  runAction = mixer.clipAction(gltf.animations[2]);
+
+  idleAction.play();
+
+});
   const helper = new OctreeHelper(worldOctree);
   helper.visible = false;
   scene.add(helper);
@@ -369,6 +413,20 @@ function animate() {
     updateSpheres(deltaTime);
     teleportPlayerIfOob();
   }
+  if (mixer) mixer.update(deltaTime);
+  if (personaje) {
+
+  // cámara detrás del personaje
+  camera.position.x = personaje.position.x;
+
+  camera.position.y = personaje.position.y + 4;
+
+  camera.position.z = personaje.position.z + 10;
+
+  // mirar al personaje
+  camera.lookAt(personaje.position);
+
+}
   renderer.render(scene, camera);
   stats.update();
 }
