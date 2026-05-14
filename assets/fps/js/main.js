@@ -8,8 +8,7 @@ import { Capsule } from "../../jsm/math/Capsule.js";
 import { GUI } from "../../jsm/libs/lil-gui.module.min.js";
 const clock = new THREE.Clock();
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x88ccee);
-scene.fog = new THREE.Fog(0x88ccee, 0, 50);
+scene.background = new THREE.Color(0xded7c9);
 
 const camera = new THREE.PerspectiveCamera(
   70,
@@ -19,12 +18,16 @@ const camera = new THREE.PerspectiveCamera(
 );
 camera.rotation.order = "YXZ";
 
-const fillLight1 = new THREE.HemisphereLight(0x8dc1de, 0x00668d, 1.5);
+const fillLight1 = new THREE.HemisphereLight(
+  0xffffff,
+  0xb8b8b8,
+  1.2
+);
 fillLight1.position.set(2, 1, 1);
 scene.add(fillLight1);
 
 const directionalLight = new THREE.DirectionalLight(0xffffff, 2.5);
-directionalLight.position.set(-5, 25, -1);
+directionalLight.position.set(15, 30, 10);
 directionalLight.castShadow = true;
 directionalLight.shadow.camera.near = 0.01;
 directionalLight.shadow.camera.far = 500;
@@ -45,7 +48,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setAnimationLoop(animate);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.VSMShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMapping = THREE.NoToneMapping;
 container.appendChild(renderer.domElement);
 
 const stats = new Stats();
@@ -122,8 +125,8 @@ for (let i = 0; i < NUM_SPHERES; i++) {
 
 const worldOctree = new Octree();
 const playerCollider = new Capsule(
-  new THREE.Vector3(0, 0.35, 0),
-  new THREE.Vector3(0, 1, 0),
+  new THREE.Vector3(0, 10, 0),
+  new THREE.Vector3(0, 11, 0),
   0.35
 );
 const playerVelocity = new THREE.Vector3();
@@ -314,16 +317,33 @@ function controls(deltaTime) {
 }
 
 const loader = new GLTFLoader().setPath("../../assets/models/gltf/");
-loader.load("collision-world.glb", (gltf) => {
-  scene.add(gltf.scene);
-  worldOctree.fromGraphNode(gltf.scene);
-  gltf.scene.traverse((child) => {
+
+loader.load("ciudad.glb", (gltf) => {
+
+  const modelo = gltf.scene;
+
+  modelo.scale.set(0.05, 0.05, 0.05);
+
+  modelo.position.set(0, -5, 0);
+
+  modelo.rotation.y = Math.PI;
+
+  scene.add(modelo);
+
+  modelo.traverse((child) => {
+
     if (child.isMesh) {
+
       child.castShadow = true;
       child.receiveShadow = true;
-      if (child.material.map) child.material.map.anisotropy = 4;
+
     }
+
   });
+
+  worldOctree.fromGraphNode(modelo);
+
+});
   const helper = new OctreeHelper(worldOctree);
   helper.visible = false;
   scene.add(helper);
@@ -331,8 +351,6 @@ loader.load("collision-world.glb", (gltf) => {
   gui.add({ debug: false }, "debug").onChange(function (value) {
     helper.visible = value;
   });
-});
-
 function teleportPlayerIfOob() {
   if (camera.position.y <= -25) {
     playerCollider.start.set(0, 0.35, 0);
