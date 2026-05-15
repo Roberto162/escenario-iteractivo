@@ -20,8 +20,8 @@ const velocidadCorrer = 0.02;
 let velocidadY = 0;
 let enSuelo = true;
 
-const gravedad = 0.015;
-const fuerzaSalto = 0.15;
+const gravedad = 0.005;
+const fuerzaSalto = 0.2;
 
 let idleAction;
 let walkAction;
@@ -447,7 +447,6 @@ if (keyStates["KeyD"]) {
   }
   // salto
 if (keyStates["Space"] && enSuelo) { velocidadY = fuerzaSalto; enSuelo = false; keyStates["Space"] = false; }
-
   // idle
   if (!moviendo && !keyStates["Mouse0"]) {
 
