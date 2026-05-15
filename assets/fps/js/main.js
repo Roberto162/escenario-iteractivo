@@ -4,7 +4,6 @@ import Stats from "../../jsm/libs/stats.module.js";
 import { GLTFLoader } from "../../jsm/loaders/GLTFLoader.js";
 import { Octree } from "../../jsm/math/Octree.js";
 import { OctreeHelper } from "../../jsm/helpers/OctreeHelper.js";
-import { Capsule } from "../../jsm/math/Capsule.js";
 import { GUI } from "../../jsm/libs/lil-gui.module.min.js";
 
 const clock = new THREE.Clock();
@@ -16,16 +15,24 @@ const acciones = {};
 
 let tiempoMovimiento = 0;
 
-const velocidadCaminar = 0.05;
-const velocidadCorrer = 0.12;
-let primeraPersona = false;
+const velocidadCaminar = 0.008;
+const velocidadCorrer = 0.02;
 let velocidadY = 0;
-let enElSuelo = true;
+let enSuelo = true;
+
+const gravedad = 0.015;
+const fuerzaSalto = 0.15;
 
 let idleAction;
 let walkAction;
 let runAction;
 let attackAction;
+let modoPrimeraPersona = false;
+let rotacionVertical = 0;
+const personajeCollider = new THREE.Sphere(
+  new THREE.Vector3(),
+  0.5
+);
 scene.background = new THREE.Color(0xded7c9);
 
 const camera = new THREE.PerspectiveCamera(
@@ -142,16 +149,7 @@ for (let i = 0; i < NUM_SPHERES; i++) {
 }
 
 const worldOctree = new Octree();
-const playerCollider = new Capsule(
-  new THREE.Vector3(0, 10, 0),
-  new THREE.Vector3(0, 11, 0),
-  0.35
-);
-const playerVelocity = new THREE.Vector3();
-const playerDirection = new THREE.Vector3();
 
-let playerOnFloor = false;
-let mouseTime = 0;
 
 const keyStates = {};
 const vector1 = new THREE.Vector3();
@@ -159,10 +157,16 @@ const vector2 = new THREE.Vector3();
 const vector3 = new THREE.Vector3();
 
 document.addEventListener("keydown", (event) => {
+
   keyStates[event.code] = true;
+
+  // cambiar cámara
   if (event.code === "KeyV") {
-    primeraPersona = !primeraPersona;
+
+    modoPrimeraPersona = !modoPrimeraPersona;
+
   }
+
 });
 document.addEventListener("keyup", (event) => {
   keyStates[event.code] = false;
@@ -180,14 +184,28 @@ document.addEventListener("mouseup", () => {
 });
 container.addEventListener("mousedown", () => {
   document.body.requestPointerLock();
-  mouseTime = performance.now();
 });
 
 document.body.addEventListener("mousemove", (event) => {
+
+  if (!personaje) return;
+
   if (document.pointerLockElement === document.body) {
-    camera.rotation.y -= event.movementX / 500;
-    camera.rotation.x -= event.movementY / 500;
+
+    // rotación horizontal personaje
+    personaje.rotation.y -= event.movementX * 0.007;
+
+    // rotación vertical cámara
+    rotacionVertical -= event.movementY * 0.002;
+
+    // limitar cámara
+    rotacionVertical = Math.max(
+      -0.8,
+      Math.min(0.8, rotacionVertical)
+    );
+
   }
+
 });
 window.addEventListener("resize", onWindowResize);
 
@@ -204,14 +222,16 @@ function throwBall() {
   const sphere = spheres[sphereIdx];
 
   // dirección del personaje
-  const direccion = new THREE.Vector3(0, 0, -1);
+  const direccion = new THREE.Vector3();
 
-  direccion.applyQuaternion(personaje.quaternion);
+camera.getWorldDirection(direccion);
+
+direccion.normalize();
 
   // posición frente al personaje
   sphere.collider.center.copy(personaje.position);
 
-  sphere.collider.center.y += 2;
+sphere.collider.center.y += 1;
 
   sphere.collider.center.addScaledVector(direccion, 2);
 
@@ -222,19 +242,6 @@ function throwBall() {
 
 }
 
-
-function updatePlayer(deltaTime) {
-  let damping = Math.exp(-4 * deltaTime) - 1;
-  if (!playerOnFloor) {
-    playerVelocity.y -= GRAVITY * deltaTime;
-    damping *= 0.1;
-  }
-  playerVelocity.addScaledVector(playerVelocity, damping);
-  const deltaPosition = playerVelocity.clone().multiplyScalar(deltaTime);
-
-playerCollider.translate(deltaPosition);
-  //camera.position.copy(playerCollider.end);
-}
 
 function playerSphereCollision(sphere) {
   const center = vector1
@@ -261,29 +268,7 @@ function playerSphereCollision(sphere) {
   }
 }
 
-function spheresCollisions() {
-  for (let i = 0, length = spheres.length; i < length; i++) {
-    const s1 = spheres[i];
-    for (let j = i + 1; j < length; j++) {
-      const s2 = spheres[j];
-      const d2 = s1.collider.center.distanceToSquared(s2.collider.center);
-      const r = s1.collider.radius + s2.collider.radius;
-      const r2 = r * r;
-      if (d2 < r2) {
-        const normal = vector1
-          .subVectors(s1.collider.center, s2.collider.center)
-          .normalize();
-        const v1 = vector2.copy(normal).multiplyScalar(normal.dot(s1.velocity));
-        const v2 = vector3.copy(normal).multiplyScalar(normal.dot(s2.velocity));
-        s1.velocity.add(v2).sub(v1);
-        s2.velocity.add(v1).sub(v2);
-        const d = (r - Math.sqrt(d2)) / 2;
-        s1.collider.center.addScaledVector(normal, d);
-        s2.collider.center.addScaledVector(normal, -d);
-      }
-    }
-  }
-}
+
 
 function updateSpheres(deltaTime) {
   spheres.forEach((sphere) => {
@@ -300,9 +285,7 @@ function updateSpheres(deltaTime) {
     }
     const damping = Math.exp(-1.5 * deltaTime) - 1;
     sphere.velocity.addScaledVector(sphere.velocity, damping);
-    playerSphereCollision(sphere);
   });
-  spheresCollisions();
   for (const sphere of spheres) {
 
   sphere.mesh.position.copy(sphere.collider.center);
@@ -314,20 +297,6 @@ function updateSpheres(deltaTime) {
 }
 }
 
-function getForwardVector() {
-  camera.getWorldDirection(playerDirection);
-  playerDirection.y = 0;
-  playerDirection.normalize();
-  return playerDirection;
-}
-
-function getSideVector() {
-  camera.getWorldDirection(playerDirection);
-  playerDirection.y = 0;
-  playerDirection.normalize();
-  playerDirection.cross(camera.up);
-  return playerDirection;
-}
 
 function cambiarAnimacion(nombre) {
 
@@ -362,13 +331,14 @@ Object.values(acciones).forEach((accion) => {
 function controls(deltaTime) {
 
   if (!personaje) return;
+  if (keyStates["KeyP"]) { console.log(personaje.position); keyStates["KeyP"] = false; }
 
   let moviendo = false;
 
   let velocidad = velocidadCaminar;
 
   // correr después de 1 segundo
-  if (keyStates["KeyW"]) {
+  if (keyStates["KeyS"]) {
 
     tiempoMovimiento += deltaTime;
 
@@ -378,61 +348,172 @@ function controls(deltaTime) {
 
       velocidad = velocidadCorrer;
 
-      cambiarAnimacion("Run");
+      cambiarAnimacion("Poder");
 
     } else {
 
-      cambiarAnimacion("Walk");
+      cambiarAnimacion("Caminando");
 
     }
 
-    personaje.translateZ(-velocidad);
+    const direccion = new THREE.Vector3(0, 0, -1);
+
+direccion.applyQuaternion(personaje.quaternion);
+
+const nuevaPosicion = personaje.position.clone();
+
+nuevaPosicion.addScaledVector(
+  direccion,
+  velocidad
+);
+
+
+  personaje.position.copy(nuevaPosicion);
 
   }
 
   // atrás
-  if (keyStates["KeyS"]) {
+  if (keyStates["KeyW"]) {
 
-    cambiarAnimacion("Walk");
+    cambiarAnimacion("Caminando");
 
-    personaje.translateZ(velocidadCaminar);
+    const direccion = new THREE.Vector3(0, 0, 1);
+
+direccion.applyQuaternion(personaje.quaternion);
+
+const nuevaPosicion = personaje.position.clone();
+
+nuevaPosicion.addScaledVector(
+  direccion,
+  velocidadCaminar
+);
+
+
+  personaje.position.copy(nuevaPosicion);
 
     moviendo = true;
 
   }
 
-  // rotar izquierda
-  if (keyStates["KeyA"]) {
+  // izquierda (strafe)
+if (keyStates["KeyA"]) {
 
-    personaje.rotation.y += 0.05;
+  moviendo = true;
 
-  }
+  cambiarAnimacion("Caminando");
 
-  // rotar derecha
-  if (keyStates["KeyD"]) {
+  const direccion = new THREE.Vector3(-1, 0, 0);
 
-    personaje.rotation.y -= 0.05;
+  direccion.applyQuaternion(personaje.quaternion);
 
-  }
+  const nuevaPosicion = personaje.position.clone();
 
-  // salto
-  if (keyStates["Space"] && enElSuelo) {
-    velocidadY = 0.15;
-    enElSuelo = false;
-  }
+  nuevaPosicion.addScaledVector(
+    direccion,
+    velocidadCaminar
+  );
+    personaje.position.copy(nuevaPosicion);
+
+}
+
+// derecha (strafe)
+if (keyStates["KeyD"]) {
+
+  moviendo = true;
+
+  cambiarAnimacion("Caminando");
+
+  const direccion = new THREE.Vector3(1, 0, 0);
+
+  direccion.applyQuaternion(personaje.quaternion);
+
+  const nuevaPosicion = personaje.position.clone();
+
+  nuevaPosicion.addScaledVector(
+    direccion,
+    velocidadCaminar
+  );
+
+    personaje.position.copy(nuevaPosicion);
+
+}
+
+
   // ataque
   if (keyStates["Mouse0"]) {
 
-    cambiarAnimacion("Attack");
+    cambiarAnimacion("Ataque");
 
   }
+  // salto
+if (keyStates["Space"] && enSuelo) { velocidadY = fuerzaSalto; enSuelo = false; keyStates["Space"] = false; }
 
   // idle
   if (!moviendo && !keyStates["Mouse0"]) {
 
     tiempoMovimiento = 0;
 
-    cambiarAnimacion("Idle");
+    cambiarAnimacion("CamConEsp");
+
+  }
+
+}
+function verificarColision(posicionNueva) {
+
+  const collider = new THREE.Sphere(
+    posicionNueva,
+    0.5
+  );
+
+  const result = worldOctree.sphereIntersect(collider);
+
+  return result;
+
+}
+
+function actualizarFisicaPersonaje() {
+
+  if (!personaje) return;
+  if (personaje.position.y < -20) { personaje.position.set(10, 10, -5); velocidadY = 0; }
+
+  // actualizar collider
+  personajeCollider.center.copy(personaje.position);
+
+  personajeCollider.center.y += 1;
+
+  // gravedad
+  velocidadY -= gravedad;
+                
+  personaje.position.y += velocidadY;
+
+  // actualizar collider otra vez
+  personajeCollider.center.copy(personaje.position);
+
+  personajeCollider.center.y += 0.5;
+
+  // detectar colisión
+  const result = worldOctree.sphereIntersect(
+    personajeCollider
+  );
+
+  enSuelo = false;
+
+  if (result) {
+
+    // detectar si está sobre algo
+    if (result.normal.y > 0.5) {
+
+      enSuelo = true;
+
+      velocidadY = 0;
+
+    }
+
+    // empujar fuera de la geometría
+    personaje.position.addScaledVector(
+      result.normal,
+      result.depth
+    );
 
   }
 
@@ -446,7 +527,7 @@ loader.load("ciudad.glb", (gltf) => {
 
   modelo.scale.set(0.05, 0.05, 0.05);
 
-  modelo.position.set(0, -5, 0);
+  modelo.position.set(0, -3, 0);
 
   modelo.rotation.y = Math.PI;
 
@@ -462,55 +543,46 @@ loader.load("ciudad.glb", (gltf) => {
     }
 
   });
-
+modelo.updateMatrixWorld(true);
   worldOctree.fromGraphNode(modelo);
 
 });
 
 loader.load("sauron.glb", (gltf) => {
-
   personaje = gltf.scene;
-
-  personaje.scale.set(1, 1, 1);
-
-  personaje.position.set(0, 0, 0);
-
+  personaje.scale.set(0.6, 0.6, 0.6);
+  
+  // Lo centramos en X y Z, y lo ponemos en Y=10 para que caiga al centro del mapa
+  personaje.position.set(0, 10, 0); 
+  
   scene.add(personaje);
 
-  // sombras
   personaje.traverse((child) => {
-
     if (child.isMesh) {
-
       child.castShadow = true;
       child.receiveShadow = true;
-
     }
-
   });
 
-  // 🎬 animaciones
   mixer = new THREE.AnimationMixer(personaje);
 
-  console.log(gltf.animations);
+  // Asignación correcta de todas las animaciones (asegúrate de que los índices coincidan)
+  idleAction = mixer.clipAction(gltf.animations[0]);
+  walkAction = mixer.clipAction(gltf.animations[1]); // IMPORTANTE: Agregamos esta línea
+  runAction = mixer.clipAction(gltf.animations[2]);
+  attackAction = mixer.clipAction(gltf.animations[3]);
 
-// Asignar animaciones
-idleAction = mixer.clipAction(gltf.animations[0]);
-walkAction = mixer.clipAction(gltf.animations[1]);
-runAction = mixer.clipAction(gltf.animations[2]);
+  attackAction.setLoop(THREE.LoopOnce);
+  attackAction.clampWhenFinished = true;
 
-// guardar en objeto
-acciones["Idle"] = idleAction;
-acciones["Walk"] = walkAction;
-acciones["Run"] = runAction;
+  // Guardamos en el objeto acciones con los nombres que usas en controls()
+  acciones["CamConEsp"] = idleAction;
+  acciones["Caminando"] = walkAction;
+  acciones["Poder"] = runAction;
+  acciones["Ataque"] = attackAction;
 
-// animación inicial
-accionActual = idleAction;
-accionActual.play();
-attackAction = mixer.clipAction(gltf.animations[3]);
-acciones["Attack"] = attackAction;
-attackAction.setLoop(THREE.LoopOnce);
-attackAction.clampWhenFinished = true;
+  accionActual = idleAction;
+  accionActual.play();
 });
   const helper = new OctreeHelper(worldOctree);
   helper.visible = false;
@@ -519,61 +591,59 @@ attackAction.clampWhenFinished = true;
   gui.add({ debug: false }, "debug").onChange(function (value) {
     helper.visible = value;
   });
-function teleportPlayerIfOob() {
-  if (camera.position.y <= -25) {
-    playerCollider.start.set(0, 0.35, 0);
-    playerCollider.end.set(0, 1, 0);
-    playerCollider.radius = 0.35;
-    camera.position.copy(playerCollider.end);
-    camera.rotation.set(0, 0, 0);
-  }
-}
+
 
 function animate() {
   const deltaTime = Math.min(0.05, clock.getDelta()) / STEPS_PER_FRAME;
   for (let i = 0; i < STEPS_PER_FRAME; i++) {
     controls(deltaTime);
+
+actualizarFisicaPersonaje();
+
 updateSpheres(deltaTime);
   }
   if (mixer) mixer.update(deltaTime);
   if (personaje) {
-    // 1. Aplicar Gravedad
-    if (!enElSuelo) {
-      velocidadY -= 0.01;
-    }
-    personaje.position.y += velocidadY;
 
-    // 2. Detectar el suelo
-    if (personaje.position.y <= 0) {
-      personaje.position.y = 0;
-      velocidadY = 0;
-      enElSuelo = true;
-    }
+  // PRIMERA PERSONA
+  if (modoPrimeraPersona) {
 
-    // 3. Posicionar la Cámara
-    let offset;
-    let objetivo = personaje.position.clone();
+    const cabeza = new THREE.Vector3(0, 2.2, 0);
 
-    if (primeraPersona) {
-      // Vista en Primera Persona
-      offset = new THREE.Vector3(0, 2, 0.5);
-      objetivo.y += 2;
-      
-      // Calcular hacia dónde mirar en primera persona
-      let frente = new THREE.Vector3(0, 0, -5);
-      frente.applyQuaternion(personaje.quaternion);
-      objetivo.add(frente);
-    } else {
-      // Vista en Tercera Persona (Estilo Free Fire)
-      offset = new THREE.Vector3(0, 4, 8);
-      objetivo.y += 2;
-    }
+    cabeza.applyQuaternion(personaje.quaternion);
 
-    // Aplicar la rotación del personaje a la cámara y actualizar
-    offset.applyQuaternion(personaje.quaternion);
-    camera.position.copy(personaje.position).add(offset);
-    camera.lookAt(objetivo);
+    camera.position.copy(personaje.position).add(cabeza);
+
+    const frente = new THREE.Vector3(0, 2, -10);
+
+    frente.applyQuaternion(personaje.quaternion);
+
+    camera.lookAt(
+      personaje.position.clone().add(frente)
+    );
+
   }
+
+  // TERCERA PERSONA
+  else {
+
+    const offset = new THREE.Vector3(0, 2, -4);
+
+    offset.applyQuaternion(personaje.quaternion);
+
+    camera.position.copy(personaje.position).add(offset);
+
+    const objetivo = personaje.position.clone();
+
+    objetivo.y += 2;
+
+    objetivo.y += rotacionVertical * 10;
+
+camera.lookAt(objetivo);
+
+  }
+
+}
   renderer.render(scene, camera);
   stats.update();
 }
