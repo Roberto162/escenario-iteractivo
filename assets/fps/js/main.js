@@ -11,6 +11,16 @@ const clock = new THREE.Clock();
 const scene = new THREE.Scene();
 let personaje;
 let mixer;
+let accionActual;
+const acciones = {};
+
+let tiempoMovimiento = 0;
+
+const velocidadCaminar = 0.05;
+const velocidadCorrer = 0.12;
+let primeraPersona = false;
+let velocidadY = 0;
+let enElSuelo = true;
 
 let idleAction;
 let walkAction;
@@ -150,17 +160,29 @@ const vector3 = new THREE.Vector3();
 
 document.addEventListener("keydown", (event) => {
   keyStates[event.code] = true;
+  if (event.code === "KeyV") {
+    primeraPersona = !primeraPersona;
+  }
 });
 document.addEventListener("keyup", (event) => {
   keyStates[event.code] = false;
+});
+document.addEventListener("mousedown", () => {
+  keyStates["Mouse0"] = true;
+});
+
+document.addEventListener("mouseup", () => {
+  keyStates["Mouse0"] = false;
+
+  if (document.pointerLockElement !== null) {
+    throwBall();
+  }
 });
 container.addEventListener("mousedown", () => {
   document.body.requestPointerLock();
   mouseTime = performance.now();
 });
-document.addEventListener("mouseup", () => {
-  if (document.pointerLockElement !== null) throwBall();
-});
+
 document.body.addEventListener("mousemove", (event) => {
   if (document.pointerLockElement === document.body) {
     camera.rotation.y -= event.movementX / 500;
@@ -176,34 +198,30 @@ function onWindowResize() {
 }
 
 function throwBall() {
+
+  if (!personaje) return;
+
   const sphere = spheres[sphereIdx];
-  camera.getWorldDirection(playerDirection);
-  sphere.collider.center
-    .copy(playerCollider.end)
-    .addScaledVector(playerDirection, playerCollider.radius * 1.5);
-  const impulse =
-    15 + 30 * (1 - Math.exp((mouseTime - performance.now()) * 0.001));
-  sphere.velocity.copy(playerDirection).multiplyScalar(impulse);
-  sphere.velocity.addScaledVector(playerVelocity, 2);
+
+  // dirección del personaje
+  const direccion = new THREE.Vector3(0, 0, -1);
+
+  direccion.applyQuaternion(personaje.quaternion);
+
+  // posición frente al personaje
+  sphere.collider.center.copy(personaje.position);
+
+  sphere.collider.center.y += 2;
+
+  sphere.collider.center.addScaledVector(direccion, 2);
+
+  // velocidad
+  sphere.velocity.copy(direccion).multiplyScalar(25);
+
   sphereIdx = (sphereIdx + 1) % spheres.length;
+
 }
 
-function playerCollisions() {
-  const result = worldOctree.capsuleIntersect(playerCollider);
-  playerOnFloor = false;
-  if (result) {
-    playerOnFloor = result.normal.y > 0;
-    if (!playerOnFloor) {
-      playerVelocity.addScaledVector(
-        result.normal,
-        -result.normal.dot(playerVelocity)
-      );
-    }
-    if (result.depth >= 1e-10) {
-      playerCollider.translate(result.normal.multiplyScalar(result.depth));
-    }
-  }
-}
 
 function updatePlayer(deltaTime) {
   let damping = Math.exp(-4 * deltaTime) - 1;
@@ -213,8 +231,8 @@ function updatePlayer(deltaTime) {
   }
   playerVelocity.addScaledVector(playerVelocity, damping);
   const deltaPosition = playerVelocity.clone().multiplyScalar(deltaTime);
-  playerCollider.translate(deltaPosition);
-  playerCollisions();
+
+playerCollider.translate(deltaPosition);
   //camera.position.copy(playerCollider.end);
 }
 
@@ -311,17 +329,113 @@ function getSideVector() {
   return playerDirection;
 }
 
+function cambiarAnimacion(nombre) {
+
+  // verificar que exista
+  if (!acciones[nombre]) return;
+
+ if (accionActual === acciones[nombre]) return;
+
+Object.values(acciones).forEach((accion) => {
+
+  accion.stop();
+
+});
+
+
+  // desvanecer animación anterior
+  if (accionActual) {
+
+    accionActual.fadeOut(0.2);
+
+  }
+
+  // nueva animación
+  accionActual = acciones[nombre];
+
+  accionActual
+    .reset()
+    .fadeIn(0.2)
+    .play();
+
+} 
 function controls(deltaTime) {
-  const speedDelta = deltaTime * (playerOnFloor ? 25 : 8);
-  if (keyStates["KeyW"])
-    playerVelocity.add(getForwardVector().multiplyScalar(speedDelta));
-  if (keyStates["KeyS"])
-    playerVelocity.add(getForwardVector().multiplyScalar(-speedDelta));
-  if (keyStates["KeyA"])
-    playerVelocity.add(getSideVector().multiplyScalar(-speedDelta));
-  if (keyStates["KeyD"])
-    playerVelocity.add(getSideVector().multiplyScalar(speedDelta));
-  if (playerOnFloor && keyStates["Space"]) playerVelocity.y = 15;
+
+  if (!personaje) return;
+
+  let moviendo = false;
+
+  let velocidad = velocidadCaminar;
+
+  // correr después de 1 segundo
+  if (keyStates["KeyW"]) {
+
+    tiempoMovimiento += deltaTime;
+
+    moviendo = true;
+
+    if (tiempoMovimiento > 1) {
+
+      velocidad = velocidadCorrer;
+
+      cambiarAnimacion("Run");
+
+    } else {
+
+      cambiarAnimacion("Walk");
+
+    }
+
+    personaje.translateZ(-velocidad);
+
+  }
+
+  // atrás
+  if (keyStates["KeyS"]) {
+
+    cambiarAnimacion("Walk");
+
+    personaje.translateZ(velocidadCaminar);
+
+    moviendo = true;
+
+  }
+
+  // rotar izquierda
+  if (keyStates["KeyA"]) {
+
+    personaje.rotation.y += 0.05;
+
+  }
+
+  // rotar derecha
+  if (keyStates["KeyD"]) {
+
+    personaje.rotation.y -= 0.05;
+
+  }
+
+  // salto
+  if (keyStates["Space"] && enElSuelo) {
+    velocidadY = 0.15;
+    enElSuelo = false;
+  }
+  // ataque
+  if (keyStates["Mouse0"]) {
+
+    cambiarAnimacion("Attack");
+
+  }
+
+  // idle
+  if (!moviendo && !keyStates["Mouse0"]) {
+
+    tiempoMovimiento = 0;
+
+    cambiarAnimacion("Idle");
+
+  }
+
 }
 
 const loader = new GLTFLoader().setPath("../../assets/models/gltf/");
@@ -380,13 +494,23 @@ loader.load("sauron.glb", (gltf) => {
 
   console.log(gltf.animations);
 
-  // Asignar animaciones
-  idleAction = mixer.clipAction(gltf.animations[0]);
-  walkAction = mixer.clipAction(gltf.animations[1]);
-  runAction = mixer.clipAction(gltf.animations[2]);
+// Asignar animaciones
+idleAction = mixer.clipAction(gltf.animations[0]);
+walkAction = mixer.clipAction(gltf.animations[1]);
+runAction = mixer.clipAction(gltf.animations[2]);
 
-  idleAction.play();
+// guardar en objeto
+acciones["Idle"] = idleAction;
+acciones["Walk"] = walkAction;
+acciones["Run"] = runAction;
 
+// animación inicial
+accionActual = idleAction;
+accionActual.play();
+attackAction = mixer.clipAction(gltf.animations[3]);
+acciones["Attack"] = attackAction;
+attackAction.setLoop(THREE.LoopOnce);
+attackAction.clampWhenFinished = true;
 });
   const helper = new OctreeHelper(worldOctree);
   helper.visible = false;
@@ -409,24 +533,47 @@ function animate() {
   const deltaTime = Math.min(0.05, clock.getDelta()) / STEPS_PER_FRAME;
   for (let i = 0; i < STEPS_PER_FRAME; i++) {
     controls(deltaTime);
-    updatePlayer(deltaTime);
-    updateSpheres(deltaTime);
-    teleportPlayerIfOob();
+updateSpheres(deltaTime);
   }
   if (mixer) mixer.update(deltaTime);
   if (personaje) {
+    // 1. Aplicar Gravedad
+    if (!enElSuelo) {
+      velocidadY -= 0.01;
+    }
+    personaje.position.y += velocidadY;
 
-  // cámara detrás del personaje
-  camera.position.x = personaje.position.x;
+    // 2. Detectar el suelo
+    if (personaje.position.y <= 0) {
+      personaje.position.y = 0;
+      velocidadY = 0;
+      enElSuelo = true;
+    }
 
-  camera.position.y = personaje.position.y + 4;
+    // 3. Posicionar la Cámara
+    let offset;
+    let objetivo = personaje.position.clone();
 
-  camera.position.z = personaje.position.z + 10;
+    if (primeraPersona) {
+      // Vista en Primera Persona
+      offset = new THREE.Vector3(0, 2, 0.5);
+      objetivo.y += 2;
+      
+      // Calcular hacia dónde mirar en primera persona
+      let frente = new THREE.Vector3(0, 0, -5);
+      frente.applyQuaternion(personaje.quaternion);
+      objetivo.add(frente);
+    } else {
+      // Vista en Tercera Persona (Estilo Free Fire)
+      offset = new THREE.Vector3(0, 4, 8);
+      objetivo.y += 2;
+    }
 
-  // mirar al personaje
-  camera.lookAt(personaje.position);
-
-}
+    // Aplicar la rotación del personaje a la cámara y actualizar
+    offset.applyQuaternion(personaje.quaternion);
+    camera.position.copy(personaje.position).add(offset);
+    camera.lookAt(objetivo);
+  }
   renderer.render(scene, camera);
   stats.update();
 }
