@@ -5,6 +5,7 @@ import { GLTFLoader } from "../../jsm/loaders/GLTFLoader.js";
 import { Octree } from "../../jsm/math/Octree.js";
 import { OctreeHelper } from "../../jsm/helpers/OctreeHelper.js";
 import { GUI } from "../../jsm/libs/lil-gui.module.min.js";
+import { Capsule } from "../../jsm/math/Capsule.js";
 
 const clock = new THREE.Clock();
 const scene = new THREE.Scene();
@@ -29,10 +30,7 @@ let runAction;
 let attackAction;
 let modoPrimeraPersona = false;
 let rotacionVertical = 0;
-const personajeCollider = new THREE.Sphere(
-  new THREE.Vector3(),
-  0.5
-);
+const personajeCollider = new Capsule(new THREE.Vector3(0, 0.4, 0), new THREE.Vector3(0, 2.0, 0), 0.4)
 scene.background = new THREE.Color(0xded7c9);
 
 const camera = new THREE.PerspectiveCamera(
@@ -329,133 +327,71 @@ Object.values(acciones).forEach((accion) => {
 
 } 
 function controls(deltaTime) {
-
   if (!personaje) return;
   if (keyStates["KeyP"]) { console.log(personaje.position); keyStates["KeyP"] = false; }
 
   let moviendo = false;
 
-  let velocidad = velocidadCaminar;
-
-  // correr después de 1 segundo
-  if (keyStates["KeyS"]) {
-
-    tiempoMovimiento += deltaTime;
-
-    moviendo = true;
-
-    if (tiempoMovimiento > 1) {
-
-      velocidad = velocidadCorrer;
-
-      cambiarAnimacion("Poder");
-
-    } else {
-
-      cambiarAnimacion("Caminando");
-
-    }
-
-    const direccion = new THREE.Vector3(0, 0, -1);
-
-direccion.applyQuaternion(personaje.quaternion);
-
-const nuevaPosicion = personaje.position.clone();
-
-nuevaPosicion.addScaledVector(
-  direccion,
-  velocidad
-);
-
-
-  personaje.position.copy(nuevaPosicion);
-
-  }
+  // adelante
+  if (keyStates["KeyW"]) { 
+    moviendo = true; 
+    cambiarAnimacion("CamConEsp");
+    const direccion = new THREE.Vector3(0, 0, 1); 
+    direccion.applyQuaternion(personaje.quaternion); 
+    const nuevaPosicion = personaje.position.clone(); 
+    nuevaPosicion.addScaledVector(direccion, velocidadCorrer);
+    personaje.position.copy(nuevaPosicion); 
+  } 
 
   // atrás
-  if (keyStates["KeyW"]) {
-
-    cambiarAnimacion("Caminando");
-
-    const direccion = new THREE.Vector3(0, 0, 1);
-
-direccion.applyQuaternion(personaje.quaternion);
-
-const nuevaPosicion = personaje.position.clone();
-
-nuevaPosicion.addScaledVector(
-  direccion,
-  velocidadCaminar
-);
-
-
-  personaje.position.copy(nuevaPosicion);
-
-    moviendo = true;
-
+  if (keyStates["KeyS"]) { 
+    moviendo = true; 
+    cambiarAnimacion("Caminando"); 
+    const direccion = new THREE.Vector3(0, 0, -1);
+    direccion.applyQuaternion(personaje.quaternion); 
+    const nuevaPosicion = personaje.position.clone(); 
+    nuevaPosicion.addScaledVector(direccion, velocidadCaminar); 
+    personaje.position.copy(nuevaPosicion); 
   }
 
   // izquierda (strafe)
-if (keyStates["KeyA"]) {
-
-  moviendo = true;
-
-  cambiarAnimacion("Caminando");
-
-  const direccion = new THREE.Vector3(-1, 0, 0);
-
-  direccion.applyQuaternion(personaje.quaternion);
-
-  const nuevaPosicion = personaje.position.clone();
-
-  nuevaPosicion.addScaledVector(
-    direccion,
-    velocidadCaminar
-  );
+  if (keyStates["KeyA"]) {
+    moviendo = true;
+    cambiarAnimacion("Caminando");
+    const direccion = new THREE.Vector3(-1, 0, 0);
+    direccion.applyQuaternion(personaje.quaternion);
+    const nuevaPosicion = personaje.position.clone();
+    nuevaPosicion.addScaledVector(direccion, velocidadCaminar);
     personaje.position.copy(nuevaPosicion);
+  }
 
-}
-
-// derecha (strafe)
-if (keyStates["KeyD"]) {
-
-  moviendo = true;
-
-  cambiarAnimacion("Caminando");
-
-  const direccion = new THREE.Vector3(1, 0, 0);
-
-  direccion.applyQuaternion(personaje.quaternion);
-
-  const nuevaPosicion = personaje.position.clone();
-
-  nuevaPosicion.addScaledVector(
-    direccion,
-    velocidadCaminar
-  );
-
+  // derecha (strafe)
+  if (keyStates["KeyD"]) {
+    moviendo = true;
+    cambiarAnimacion("Caminando");
+    const direccion = new THREE.Vector3(1, 0, 0);
+    direccion.applyQuaternion(personaje.quaternion);
+    const nuevaPosicion = personaje.position.clone();
+    nuevaPosicion.addScaledVector(direccion, velocidadCaminar);
     personaje.position.copy(nuevaPosicion);
-
-}
-
+  }
 
   // ataque
   if (keyStates["Mouse0"]) {
-
     cambiarAnimacion("Ataque");
-
   }
+  
   // salto
-if (keyStates["Space"] && enSuelo) { velocidadY = fuerzaSalto; enSuelo = false; keyStates["Space"] = false; }
+  if (keyStates["Space"] && enSuelo) { 
+    velocidadY = fuerzaSalto; 
+    enSuelo = false; 
+    keyStates["Space"] = false; 
+  }
+  
   // idle
   if (!moviendo && !keyStates["Mouse0"]) {
-
-    tiempoMovimiento = 0;
-
-    cambiarAnimacion("CamConEsp");
-
+    if (accionActual) { accionActual.fadeOut(0.2); accionActual = null; }
   }
-
 }
 function verificarColision(posicionNueva) {
 
@@ -476,24 +412,7 @@ function actualizarFisicaPersonaje() {
   if (personaje.position.y < -20) { personaje.position.set(10, 10, -5); velocidadY = 0; }
 
   // actualizar collider
-  personajeCollider.center.copy(personaje.position);
-
-  personajeCollider.center.y += 1;
-
-  // gravedad
-  velocidadY -= gravedad;
-                
-  personaje.position.y += velocidadY;
-
-  // actualizar collider otra vez
-  personajeCollider.center.copy(personaje.position);
-
-  personajeCollider.center.y += 0.5;
-
-  // detectar colisión
-  const result = worldOctree.sphereIntersect(
-    personajeCollider
-  );
+  velocidadY -= gravedad; personaje.position.y += velocidadY; personajeCollider.start.copy(personaje.position).add(new THREE.Vector3(0, 0.4, 0)); personajeCollider.end.copy(personaje.position).add(new THREE.Vector3(0, 2.0, 0)); const result = worldOctree.capsuleIntersect(personajeCollider);
 
   enSuelo = false;
 
@@ -564,15 +483,18 @@ loader.load("sauron.glb", (gltf) => {
   });
 
   mixer = new THREE.AnimationMixer(personaje);
-
+gltf.animations.forEach((clip, index) => { console.log("Índice:", index, "- Animación:", clip.name); });
   // Asignación correcta de todas las animaciones (asegúrate de que los índices coincidan)
-  idleAction = mixer.clipAction(gltf.animations[0]);
-  walkAction = mixer.clipAction(gltf.animations[1]); // IMPORTANTE: Agregamos esta línea
-  runAction = mixer.clipAction(gltf.animations[2]);
-  attackAction = mixer.clipAction(gltf.animations[3]);
+  idleAction = mixer.clipAction(gltf.animations[2]);
+   walkAction = mixer.clipAction(gltf.animations[0]);
+    attackAction = mixer.clipAction(gltf.animations[1]); 
+   runAction = mixer.clipAction(gltf.animations[3]);
+
+   walkAction.setEffectiveTimeScale(1);
+   runAction.setEffectiveTimeScale(20);
 
   attackAction.setLoop(THREE.LoopOnce);
-  attackAction.clampWhenFinished = true;
+  attackAction.setEffectiveTimeScale(4);
 
   // Guardamos en el objeto acciones con los nombres que usas en controls()
   acciones["CamConEsp"] = idleAction;
@@ -593,15 +515,7 @@ loader.load("sauron.glb", (gltf) => {
 
 
 function animate() {
-  const deltaTime = Math.min(0.05, clock.getDelta()) / STEPS_PER_FRAME;
-  for (let i = 0; i < STEPS_PER_FRAME; i++) {
-    controls(deltaTime);
-
-actualizarFisicaPersonaje();
-
-updateSpheres(deltaTime);
-  }
-  if (mixer) mixer.update(deltaTime);
+  const deltaReal = clock.getDelta(); const deltaTime = Math.min(0.05, deltaReal) / STEPS_PER_FRAME; for (let i = 0; i < STEPS_PER_FRAME; i++) { controls(deltaTime); actualizarFisicaPersonaje(); updateSpheres(deltaTime); } if (mixer) mixer.update(deltaReal);
   if (personaje) {
 
   // PRIMERA PERSONA
