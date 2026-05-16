@@ -21,8 +21,8 @@ const velocidadCorrer = 0.02;
 let velocidadY = 0;
 let enSuelo = true;
 
-const gravedad = 0.005;
-const fuerzaSalto = 0.2;
+const gravedad = 0.002;
+const fuerzaSalto = 0.10;
 
 let idleAction;
 let walkAction;
