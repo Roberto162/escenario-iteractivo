@@ -540,8 +540,9 @@ function animate() {
   // TERCERA PERSONA
   else {
 
-    const offset = new THREE.Vector3(0, 2, -4);
+    let offset = new THREE.Vector3(0, 2, -4);
 
+    if (keyStates["KeyF"]) { offset = new THREE.Vector3(0, 2, 4); } 
     offset.applyQuaternion(personaje.quaternion);
 
     camera.position.copy(personaje.position).add(offset);
